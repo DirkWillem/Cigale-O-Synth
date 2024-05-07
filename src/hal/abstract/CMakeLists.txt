@@ -1,4 +1,5 @@
 add_library(abstract_hal INTERFACE
+        hal/dma.h
         hal/peripheral.h
         hal/pin.h
         hal/uart.h)

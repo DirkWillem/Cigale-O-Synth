@@ -15,6 +15,21 @@ constexpr void EnableUartClk(UartId id) noexcept {
   }
 }
 
+[[nodiscard]] constexpr IRQn_Type GetIrqn(UartId id) noexcept {
+  switch (id) {
+  case UartId::Usart1: return USART1_IRQn;
+  case UartId::Usart2: [[fallthrough]];
+  case UartId::LpUart2: return USART2_LPUART2_IRQn;
+  case UartId::Usart3: [[fallthrough]];
+  case UartId::Usart4: [[fallthrough]];
+  case UartId::Usart5: [[fallthrough]];
+  case UartId::Usart6: [[fallthrough]];
+  case UartId::LpUart1: return USART3_4_5_6_LPUART1_IRQn;
+  }
+
+  std::unreachable();
+}
+
 [[nodiscard]] constexpr uint32_t
 ToHalStopBits(hal::UartStopBits stop_bits) noexcept {
   switch (stop_bits) {
@@ -60,6 +75,13 @@ void InitializeUartForPollMode(UART_HandleTypeDef& huart) noexcept {
   HAL_UARTEx_SetTxFifoThreshold(&huart, UART_TXFIFO_THRESHOLD_1_8);
   HAL_UARTEx_SetRxFifoThreshold(&huart, UART_RXFIFO_THRESHOLD_1_8);
   HAL_UARTEx_DisableFifoMode(&huart);
+}
+
+void InitializeUartForInterruptMode(UartId              id,
+                                    UART_HandleTypeDef& huart) noexcept {
+  const auto irqn = GetIrqn(id);
+  HAL_NVIC_SetPriority(irqn, 0, 0);
+  HAL_NVIC_EnableIRQ(irqn);
 }
 
 }   // namespace stm32g0::detail

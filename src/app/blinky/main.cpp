@@ -1,9 +1,13 @@
 #include <stm32g0xx_hal.h>
 
+#include <stm32g0/dma.h>
 #include <stm32g0/pin.h>
 #include <stm32g0/uart.h>
 
 void ClockInit() {
+  __HAL_RCC_SYSCFG_CLK_ENABLE();
+  __HAL_RCC_PWR_CLK_ENABLE();
+
   HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
 
   // Initialize oscillators
@@ -31,13 +35,30 @@ void ClockInit() {
   HAL_RCC_ClockConfig(&clk_init, FLASH_LATENCY_0);
 }
 
-class Usart2 : public stm32g0::UartImpl<Usart2, stm32g0::UartId::Usart2> {
-  friend class stm32g0::UartImpl<Usart2, stm32g0::UartId::Usart2>;
+using DmaChans = hal::DmaChannels<stm32g0::UartTxDma<stm32g0::UartId::Usart2>,
+                                  stm32g0::UartRxDma<stm32g0::UartId::Usart2>>;
+
+template <>
+class stm32g0::Dma<stm32g0::DmaImplMarker>
+    : public stm32g0::DmaImpl<stm32g0::Dma<stm32g0::DmaImplMarker>, DmaChans> {
+};
+
+using AppDma = stm32g0::Dma<stm32g0::DmaImplMarker>;
+
+static_assert(hal::Dma<AppDma>);
+
+template <>
+class stm32g0::Uart<stm32g0::UartId::Usart2>
+    : public stm32g0::UartImpl<Usart2, stm32g0::UartId::Usart2,
+                               hal::UartOperatingMode::Dma> {
+  using Base = stm32g0::UartImpl<Usart2, stm32g0::UartId::Usart2,
+                                 hal::UartOperatingMode::Dma>;
+  friend class stm32g0::UartImpl<Usart2, stm32g0::UartId::Usart2,
+                                 hal::UartOperatingMode::Dma>;
 
  protected:
-  Usart2()
-      : stm32g0::UartImpl<Usart2, stm32g0::UartId::Usart2>{
-            {PIN(A, 2), PIN(A, 3)}, 115200} {}
+  Uart()
+      : Base{AppDma::instance(), {PIN(A, 2), PIN(A, 3)}, 115200} {}
 };
 
 extern "C" [[noreturn]] int main() {
@@ -46,11 +67,13 @@ extern "C" [[noreturn]] int main() {
 
   stm32g0::Gpo led{PIN(A, 5)};
 
-  auto& usart2 = Usart2::instance();
+  auto& usart2 = stm32g0::Usart2::instance();
 
   while (true) {
     led.Toggle();
     HAL_Delay(500);
-    usart2.Write("Hello, World!\n");
+    usart2.Write("Hello, DMA!\r\n");
   }
 }
+
+#include <stm32g0/interrupts.h>

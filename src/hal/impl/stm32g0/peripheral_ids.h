@@ -3,6 +3,8 @@
 #include <string_view>
 #include <utility>
 
+#include <stm32g0xx_hal.h>
+
 namespace stm32g0 {
 
 enum class UartId {

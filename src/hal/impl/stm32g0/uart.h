@@ -7,8 +7,10 @@
 #include <hal/peripheral.h>
 #include <hal/uart.h>
 
-#include <stm32g0/mappings/uart_pin_mapping.h>
+#include <stm32g0/dma.h>
 #include <stm32g0/pin.h>
+
+#include <stm32g0/mappings/uart_pin_mapping.h>
 
 namespace stm32g0 {
 
@@ -46,12 +48,20 @@ void SetupUartNoFc(UartId id, UART_HandleTypeDef& huart, unsigned baud,
                    hal::UartStopBits stop_bits) noexcept;
 
 void InitializeUartForPollMode(UART_HandleTypeDef& huart) noexcept;
+void InitializeUartForInterruptMode(UartId              id,
+                                    UART_HandleTypeDef& huart) noexcept;
 
 }   // namespace detail
 
+template <UartId Id, hal::DmaPriority Prio = hal::DmaPriority::Low>
+using UartTxDma = DmaChannel<Id, UartDmaRequest::Tx, Prio>;
+
+template <UartId Id, hal::DmaPriority Prio = hal::DmaPriority::Low>
+using UartRxDma = DmaChannel<Id, UartDmaRequest::Rx, Prio>;
+
 template <typename Impl, UartId Id,
-          hal::UartFlowControl   FC = hal::UartFlowControl::None,
-          hal::UartOperatingMode OM = hal::UartOperatingMode::Poll>
+          hal::UartOperatingMode OM = hal::UartOperatingMode::Poll,
+          hal::UartFlowControl   FC = hal::UartFlowControl::None>
 /**
  * Implementation for UART
  * @tparam Id UART Id
@@ -60,7 +70,12 @@ template <typename Impl, UartId Id,
  */
 class UartImpl : public hal::UsedPeripheral {
  public:
+  using TxDmaChannel = DmaChannel<Id, UartDmaRequest::Tx>;
+  using RxDmaChannel = DmaChannel<Id, UartDmaRequest::Rx>;
+
   using Pinout = detail::UartPinoutHelper<Id, FC>::Pinout;
+
+  void HandleInterrupt() noexcept { HAL_UART_IRQHandler(&huart); }
 
   /**
    * Writes a string to the UART
@@ -71,6 +86,20 @@ class UartImpl : public hal::UsedPeripheral {
   {
     HAL_UART_Transmit(&huart, reinterpret_cast<const uint8_t*>(sv.data()),
                       sv.size(), 500);
+  }
+
+  void Write(std::string_view sv)
+    requires(OM == hal::UartOperatingMode::Interrupt)
+  {
+    HAL_UART_Transmit_IT(&huart, reinterpret_cast<const uint8_t*>(sv.data()),
+                         sv.size());
+  }
+
+  void Write(std::string_view sv)
+    requires(OM == hal::UartOperatingMode::Dma)
+  {
+    HAL_UART_Transmit_DMA(&huart, reinterpret_cast<const uint8_t*>(sv.data()),
+                          sv.size());
   }
 
   /**
@@ -84,7 +113,7 @@ class UartImpl : public hal::UsedPeripheral {
 
  protected:
   /**
-   * Constructor
+   * Constructor for UART without flow control in poll or interrupt mode
    * @param pinout UART pinout
    * @param baud UART baud rate
    * @param parity UART parity
@@ -93,7 +122,8 @@ class UartImpl : public hal::UsedPeripheral {
   UartImpl(Pinout pinout, unsigned baud,
            hal::UartParity   parity    = hal::UartParity::None,
            hal::UartStopBits stop_bits = hal::UartStopBits::One)
-    requires(FC == hal::UartFlowControl::None)
+    requires(FC == hal::UartFlowControl::None
+             && OM != hal::UartOperatingMode::Dma)
       : huart{} {
     // Set up tx and rx pins
     Pin::InitializeAlternate(
@@ -109,7 +139,54 @@ class UartImpl : public hal::UsedPeripheral {
     // Set up UART for the requested operation mode
     if constexpr (OM == hal::UartOperatingMode::Poll) {
       detail::InitializeUartForPollMode(huart);
+    } else if constexpr (OM == hal::UartOperatingMode::Interrupt) {
+      detail::InitializeUartForInterruptMode(Id, huart);
+    } else {
+      std::unreachable();
     }
+  }
+
+  /**
+   * Constructor for UART without flow control in DMA mode
+   * @param pinout UART pinout
+   * @param baud UART baud rate
+   * @param parity UART parity
+   * @param stop_bits UART stop bits
+   */
+  UartImpl(hal::Dma auto& dma, Pinout pinout, unsigned baud,
+           hal::UartParity   parity    = hal::UartParity::None,
+           hal::UartStopBits stop_bits = hal::UartStopBits::One)
+    requires(FC == hal::UartFlowControl::None
+             && OM == hal::UartOperatingMode::Dma)
+      : huart{} {
+    static_assert(dma.template ChannelEnabled<TxDmaChannel>(),
+                  "TX DMA channel must be enabled");
+    static_assert(dma.template ChannelEnabled<RxDmaChannel>(),
+                  "RX DMA channel must be enabled");
+
+    // Set up tx and rx pins
+    Pin::InitializeAlternate(
+        pinout.tx, hal::FindPinAFMapping(UartTxPinMappings, Id, pinout.tx)->af,
+        pinout.pull_tx);
+    Pin::InitializeAlternate(
+        pinout.rx, hal::FindPinAFMapping(UartRxPinMappings, Id, pinout.rx)->af,
+        pinout.pull_rx);
+
+    // Initialize UART
+    detail::SetupUartNoFc(Id, huart, baud, parity, stop_bits);
+
+    // Set up UART for the requested operation mode
+    auto& htxdma = dma.template SetupChannel<TxDmaChannel>(
+        hal::DmaDirection::MemToPeriph, hal::DmaMode::Normal,
+        hal::DmaDataWidth::Byte, hal::DmaDataWidth::Byte);
+    __HAL_LINKDMA(&huart, hdmatx, htxdma);
+
+    auto& hrxdma = dma.template SetupChannel<RxDmaChannel>(
+        hal::DmaDirection::PeriphToMem, hal::DmaMode::Normal,
+        hal::DmaDataWidth::Byte, hal::DmaDataWidth::Byte);
+    __HAL_LINKDMA(&huart, hdmarx, hrxdma);
+
+    detail::InitializeUartForInterruptMode(Id, huart);
   }
 
  private:
@@ -117,6 +194,22 @@ class UartImpl : public hal::UsedPeripheral {
 };
 
 template <UartId Id>
-class Uart : public hal::UnusedPeripheral {};
+/**
+ * Marker class for UART peripherals
+ * @tparam Id UART id
+ */
+class Uart : public hal::UnusedPeripheral<Uart<Id>> {
+ public:
+  constexpr void HandleInterrupt() noexcept {}
+};
+
+using Usart1  = Uart<UartId::Usart1>;
+using Usart2  = Uart<UartId::Usart2>;
+using Usart3  = Uart<UartId::Usart3>;
+using Usart4  = Uart<UartId::Usart4>;
+using Usart5  = Uart<UartId::Usart5>;
+using Usart6  = Uart<UartId::Usart6>;
+using LpUart1 = Uart<UartId::LpUart1>;
+using LpUart2 = Uart<UartId::LpUart2>;
 
 }   // namespace stm32g0

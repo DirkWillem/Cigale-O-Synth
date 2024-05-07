@@ -20,6 +20,10 @@ function(add_stm32g0_hal VARIANT XMLFILE)
     # Add library
     add_library("${VARIANT}_hal"
             "stm32g0/generated/${VARIANT}/stm32g0/mappings/uart_pin_mapping.h"
+
+            stm32g0/dma.h
+            stm32g0/dma.cpp
+            stm32g0/interrupts.h
             stm32g0/pin.cpp
             stm32g0/pin.h
             stm32g0/uart.cpp
