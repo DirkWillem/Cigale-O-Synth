@@ -1,8 +1,29 @@
 #include <stm32g0xx_hal.h>
 
-#include <stm32g0/dma.h>
-#include <stm32g0/pin.h>
-#include <stm32g0/uart.h>
+#include "peripherals/nucleo64.h"
+
+template <typename Uart>
+  requires hal::Uart<Uart> && hal::UartRegisterReceiveCallback<Uart>
+class Echo {
+ public:
+  explicit Echo(Uart& uart)
+      : uart{uart}
+      , rx_callback{this, &Echo::ReceiveCallback} {
+    uart.RegisterUartReceiveCallback(rx_callback);
+
+    uart.Receive(buf);
+  }
+
+  void ReceiveCallback(std::span<std::byte> data) {
+    uart.Write(data);
+    uart.Receive(buf);
+  }
+ private:
+  std::array<std::byte, 128> buf{};
+  Uart&                      uart;
+
+  hal::MethodCallback<Echo, std::span<std::byte>> rx_callback;
+};
 
 void ClockInit() {
   __HAL_RCC_SYSCFG_CLK_ENABLE();
@@ -35,44 +56,20 @@ void ClockInit() {
   HAL_RCC_ClockConfig(&clk_init, FLASH_LATENCY_0);
 }
 
-using DmaChans = hal::DmaChannels<stm32g0::UartTxDma<stm32g0::UartId::Usart2>,
-                                  stm32g0::UartRxDma<stm32g0::UartId::Usart2>>;
-
-template <>
-class stm32g0::Dma<stm32g0::DmaImplMarker>
-    : public stm32g0::DmaImpl<stm32g0::Dma<stm32g0::DmaImplMarker>, DmaChans> {
-};
-
-using AppDma = stm32g0::Dma<stm32g0::DmaImplMarker>;
-
-static_assert(hal::Dma<AppDma>);
-
-template <>
-class stm32g0::Uart<stm32g0::UartId::Usart2>
-    : public stm32g0::UartImpl<Usart2, stm32g0::UartId::Usart2,
-                               hal::UartOperatingMode::Dma> {
-  using Base = stm32g0::UartImpl<Usart2, stm32g0::UartId::Usart2,
-                                 hal::UartOperatingMode::Dma>;
-  friend class stm32g0::UartImpl<Usart2, stm32g0::UartId::Usart2,
-                                 hal::UartOperatingMode::Dma>;
-
- protected:
-  Uart()
-      : Base{AppDma::instance(), {PIN(A, 2), PIN(A, 3)}, 115200} {}
-};
-
 extern "C" [[noreturn]] int main() {
   HAL_Init();
   ClockInit();
 
   stm32g0::Gpo led{PIN(A, 5)};
 
-  auto& usart2 = stm32g0::Usart2::instance();
+  std::array<std::byte, 128> buf{};
+  auto&                      usart2 = PcUart::instance();
+
+  Echo echo{usart2};
 
   while (true) {
     led.Toggle();
     HAL_Delay(500);
-    usart2.Write("Hello, DMA!\r\n");
   }
 }
 

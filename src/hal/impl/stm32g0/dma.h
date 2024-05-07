@@ -124,8 +124,8 @@ class DmaImpl<Impl, hal::DmaChannels<Channels...>>
    */
   [[nodiscard]] DMA_HandleTypeDef&
   SetupChannel(hal::DmaDirection dir, hal::DmaMode mode,
-               hal::DmaDataWidth periph_data_width,
-               hal::DmaDataWidth mem_data_width) noexcept {
+               hal::DmaDataWidth periph_data_width, bool periph_inc,
+               hal::DmaDataWidth mem_data_width, bool mem_inc) noexcept {
     constexpr auto Idx  = ChanList::template DmaChannelIndex<Chan>();
     auto&          hdma = hdmas[Idx];
 
@@ -133,10 +133,8 @@ class DmaImpl<Impl, hal::DmaChannels<Channels...>>
     hdma.Init     = {
             .Request   = detail::GetDmaRequestId(Chan::Peripheral, Chan::Request),
             .Direction = detail::ToHalDmaDirection(dir),
-            .PeriphInc = dir == hal::DmaDirection::PeriphToMem ? DMA_PINC_ENABLE
-                                                               : DMA_PINC_DISABLE,
-            .MemInc    = dir == hal::DmaDirection::MemToPeriph ? DMA_MINC_ENABLE
-                                                               : DMA_MINC_DISABLE,
+            .PeriphInc = periph_inc ? DMA_PINC_ENABLE : DMA_PINC_DISABLE,
+            .MemInc    = mem_inc ? DMA_MINC_ENABLE : DMA_MINC_DISABLE,
             .PeriphDataAlignment = detail::ToHalPeriphDataWidth(periph_data_width),
             .MemDataAlignment    = detail::ToHalMemDataWidth(mem_data_width),
             .Mode                = detail::ToHalDmaMode(mode),

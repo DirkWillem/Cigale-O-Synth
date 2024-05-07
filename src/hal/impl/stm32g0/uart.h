@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <span>
 
 #include <stm32g0xx_hal.h>
 
@@ -11,6 +12,11 @@
 #include <stm32g0/pin.h>
 
 #include <stm32g0/mappings/uart_pin_mapping.h>
+
+extern "C" {
+
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* huart, uint16_t size);
+}
 
 namespace stm32g0 {
 
@@ -69,6 +75,9 @@ template <typename Impl, UartId Id,
  * @tparam OM UART Operating Mode
  */
 class UartImpl : public hal::UsedPeripheral {
+  friend void ::HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* huart,
+                                           uint16_t            size);
+
  public:
   using TxDmaChannel = DmaChannel<Id, UartDmaRequest::Tx>;
   using RxDmaChannel = DmaChannel<Id, UartDmaRequest::Rx>;
@@ -100,6 +109,23 @@ class UartImpl : public hal::UsedPeripheral {
   {
     HAL_UART_Transmit_DMA(&huart, reinterpret_cast<const uint8_t*>(sv.data()),
                           sv.size());
+  }
+
+  void Write(std::span<const std::byte> data)
+    requires(OM == hal::UartOperatingMode::Dma)
+  {
+    HAL_UART_Transmit_DMA(&huart, reinterpret_cast<const uint8_t*>(data.data()),
+                          data.size());
+  }
+
+  void Receive(std::span<std::byte> into) noexcept
+    requires(OM == hal::UartOperatingMode::Dma
+             && hal::UartReceiveCallback<Impl>)
+  {
+    static_assert(hal::UartReceiveCallback<Impl>);
+    rx_buf = into;
+    HAL_UARTEx_ReceiveToIdle_DMA(
+        &huart, reinterpret_cast<uint8_t*>(rx_buf.data()), rx_buf.size());
   }
 
   /**
@@ -146,6 +172,13 @@ class UartImpl : public hal::UsedPeripheral {
     }
   }
 
+  void ReceiveComplete(std::size_t n_bytes) noexcept {
+    static_assert(hal::UartReceiveCallback<Impl>);
+    if constexpr (hal::UartReceiveCallback<Impl>) {
+      static_cast<Impl*>(this)->UartReceiveCallback(rx_buf.subspan(0, n_bytes));
+    }
+  }
+
   /**
    * Constructor for UART without flow control in DMA mode
    * @param pinout UART pinout
@@ -178,19 +211,19 @@ class UartImpl : public hal::UsedPeripheral {
     // Set up UART for the requested operation mode
     auto& htxdma = dma.template SetupChannel<TxDmaChannel>(
         hal::DmaDirection::MemToPeriph, hal::DmaMode::Normal,
-        hal::DmaDataWidth::Byte, hal::DmaDataWidth::Byte);
+        hal::DmaDataWidth::Byte, false, hal::DmaDataWidth::Byte, true);
     __HAL_LINKDMA(&huart, hdmatx, htxdma);
 
     auto& hrxdma = dma.template SetupChannel<RxDmaChannel>(
         hal::DmaDirection::PeriphToMem, hal::DmaMode::Normal,
-        hal::DmaDataWidth::Byte, hal::DmaDataWidth::Byte);
+        hal::DmaDataWidth::Byte, false, hal::DmaDataWidth::Byte, true);
     __HAL_LINKDMA(&huart, hdmarx, hrxdma);
 
     detail::InitializeUartForInterruptMode(Id, huart);
   }
 
- private:
-  UART_HandleTypeDef huart;
+  std::span<std::byte> rx_buf{};
+  UART_HandleTypeDef   huart;
 };
 
 template <UartId Id>
@@ -199,8 +232,16 @@ template <UartId Id>
  * @tparam Id UART id
  */
 class Uart : public hal::UnusedPeripheral<Uart<Id>> {
+  friend void ::HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* huart,
+                                           uint16_t            size);
+
  public:
   constexpr void HandleInterrupt() noexcept {}
+
+ protected:
+  void ReceiveComplete(std::size_t n_bytes) noexcept {}
+
+  UART_HandleTypeDef huart{};
 };
 
 using Usart1  = Uart<UartId::Usart1>;

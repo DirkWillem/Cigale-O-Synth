@@ -96,7 +96,8 @@ concept Dma = requires(Impl impl) {
 
   impl.template SetupChannel<detail::DummyChannel>(
       std::declval<DmaDirection>(), std::declval<DmaMode>(),
-      std::declval<DmaDataWidth>(), std::declval<DmaDataWidth>());
+      std::declval<DmaDataWidth>(), std::declval<bool>(),
+      std::declval<DmaDataWidth>(), std::declval<bool>());
 };
 
 }   // namespace hal

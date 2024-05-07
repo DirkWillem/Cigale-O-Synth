@@ -38,12 +38,17 @@ namespace stm32g0::detail {
   case hal::DmaDirection::MemToPeriph: return DMA_MEMORY_TO_PERIPH;
   case hal::DmaDirection::PeriphToMem: return DMA_PERIPH_TO_MEMORY;
   }
+
+  std::unreachable();
 }
+
 [[nodiscard]] uint32_t ToHalDmaMode(hal::DmaMode mode) noexcept {
   switch (mode) {
   case hal::DmaMode::Normal: return DMA_NORMAL;
   case hal::DmaMode::Circular: return DMA_CIRCULAR;
   }
+
+  std::unreachable();
 }
 
 [[nodiscard]] uint32_t
@@ -53,6 +58,8 @@ ToHalMemDataWidth(hal::DmaDataWidth data_width) noexcept {
   case hal::DmaDataWidth::HalfWord: return DMA_MDATAALIGN_HALFWORD;
   case hal::DmaDataWidth::Word: return DMA_MDATAALIGN_WORD;
   }
+
+  std::unreachable();
 }
 
 [[nodiscard]] uint32_t
@@ -62,6 +69,8 @@ ToHalPeriphDataWidth(hal::DmaDataWidth data_width) noexcept {
   case hal::DmaDataWidth::HalfWord: return DMA_PDATAALIGN_HALFWORD;
   case hal::DmaDataWidth::Word: return DMA_PDATAALIGN_WORD;
   }
+
+  std::unreachable();
 }
 
 [[nodiscard]] uint32_t ToHalDmaPriority(hal::DmaPriority prio) {
@@ -71,6 +80,8 @@ ToHalPeriphDataWidth(hal::DmaDataWidth data_width) noexcept {
   case hal::DmaPriority::High: return DMA_PRIORITY_HIGH;
   case hal::DmaPriority::VeryHigh: return DMA_PRIORITY_VERY_HIGH;
   }
+
+  std::unreachable();
 }
 
 void SetupDma(std::size_t n_used_channels) noexcept {

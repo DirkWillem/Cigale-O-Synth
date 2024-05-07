@@ -68,4 +68,22 @@ void DMA1_Ch4_7_DMA2_Ch1_5_DMAMUX1_OVR_IRQHandler() {
   HANDLE_DMA_IRQ(2, 5)
 }
 
+#define HANDLE_UART_RECEIVE_CALLBACK(Inst)                 \
+  if constexpr (hal::IsPeripheralInUse<stm32g0::Inst>()) { \
+    if (huart == &stm32g0::Inst::instance().huart) {       \
+      stm32g0::Inst::instance().ReceiveComplete(           \
+          static_cast<std::size_t>(size));                 \
+    }                                                      \
+  }
+
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef* huart, uint16_t size) {
+  HANDLE_UART_RECEIVE_CALLBACK(Usart1)
+  HANDLE_UART_RECEIVE_CALLBACK(Usart2)
+  HANDLE_UART_RECEIVE_CALLBACK(Usart3)
+  HANDLE_UART_RECEIVE_CALLBACK(Usart4)
+  HANDLE_UART_RECEIVE_CALLBACK(Usart5)
+  HANDLE_UART_RECEIVE_CALLBACK(Usart6)
+  HANDLE_UART_RECEIVE_CALLBACK(LpUart1)
+  HANDLE_UART_RECEIVE_CALLBACK(LpUart2)
+}
 }
