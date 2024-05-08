@@ -29,7 +29,7 @@ extern "C" [[noreturn]] int main() {
   HalInit();
   ClockInit();
 
-  stm32g4::Gpo led{PIN(A, 5)};
+  stm32g0::Gpo led{PIN(A, 5)};
   auto& inst = PcUart::instance();
 
   Echo echo{inst};
@@ -37,21 +37,8 @@ extern "C" [[noreturn]] int main() {
 
   while (true) {
     led.Toggle();
-//    inst.Write("Hello, World!\r\n");
     HAL_Delay(500);
   }
-
-  //  stm32g0::Gpo led{PIN(A, 5)};
-  //
-  //  std::array<std::byte, 128> buf{};
-  //  auto&                      usart2 = PcUart::instance();
-  //
-  //  Echo echo{usart2};
-  //
-  //  while (true) {
-  //    led.Toggle();
-  //    HAL_Delay(500);
-  //  }
 }
 
 #include <interrupts_callbacks.h>
