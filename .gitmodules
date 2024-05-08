@@ -10,3 +10,9 @@
 [submodule "src/hal/vendor/stm32_pin_data"]
 	path = src/hal/vendor/stm32_pin_data
 	url = https://github.com/STMicroelectronics/STM32_open_pin_data
+[submodule "src/hal/vendor/stm32g4xx_device"]
+	path = src/hal/vendor/stm32g4xx_device
+	url = git@github.com:STMicroElectronics/cmsis_device_g4.git
+[submodule "src/hal/vendor/stm32g4xx_hal"]
+	path = src/hal/vendor/stm32g4xx_hal
+	url = git@github.com:STMicroElectronics/stm32g4xx_hal_driver.git

@@ -7,9 +7,9 @@
 
 #include <hal/dma.h>
 
-#include <stm32g0/peripheral_ids.h>
+#include <stm32g4/peripheral_ids.h>
 
-namespace stm32g0 {
+namespace stm32g4 {
 
 template <hal::DmaChannel... Channels>
 /**
@@ -69,11 +69,11 @@ class DmaImpl;
 template <typename Impl, hal::DmaChannel... Channels>
 class DmaImpl<Impl, hal::DmaChannels<Channels...>>
     : public hal::UsedPeripheral {
-#if defined(STM32G0B1xx) || defined(STM32G0C1xx)
-  static constexpr auto NDma1Channels = 7U;
-  static constexpr auto NDma2Channels = 5U;
+#if defined(STM32G474xx)
+  static constexpr auto NDma1Channels = 8u;
+  static constexpr auto NDma2Channels = 8u;
 #else
-#error "Cannot determine number of DMA channels for this STM32G0 variant"
+#error "Cannot determine number of DMA channels for this STM32G4 variant"
 #endif
 
   static constexpr auto NMaxDmaChannels = NDma1Channels + NDma2Channels;
@@ -172,8 +172,9 @@ class DmaImpl<Impl, hal::DmaChannels<Channels...>>
   [[nodiscard]] static constexpr DMA_Channel_TypeDef* DmaChannel() noexcept {
     const std::array<DMA_Channel_TypeDef*, NMaxDmaChannels> channels{
         DMA1_Channel1, DMA1_Channel2, DMA1_Channel3, DMA1_Channel4,
-        DMA1_Channel5, DMA1_Channel6, DMA1_Channel7, DMA2_Channel1,
-        DMA2_Channel2, DMA2_Channel3, DMA2_Channel4, DMA2_Channel5};
+        DMA1_Channel5, DMA1_Channel6, DMA1_Channel7, DMA1_Channel8,
+        DMA2_Channel1, DMA2_Channel2, DMA2_Channel3, DMA2_Channel4,
+        DMA2_Channel5, DMA2_Channel6, DMA2_Channel7, DMA2_Channel8};
 
     return channels[ChanList::template DmaChannelIndex<Chan>()];
   }
@@ -190,6 +191,11 @@ class Dma : public hal::UnusedPeripheral<Dma<M>> {
   [[nodiscard]] static constexpr bool ChannelInUse() noexcept {
     std::unreachable();
   }
+
+  template <unsigned DmaInst, unsigned Chan>
+  constexpr void HandleInterrupt() noexcept {
+    std::unreachable();
+  }
 };
 
-}   // namespace stm32g0
+}   // namespace stm32g4
