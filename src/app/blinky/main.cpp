@@ -2,7 +2,7 @@
 #include <peripherals.h>
 
 template <typename Uart>
-  requires hal::Uart<Uart> && hal::UartRegisterReceiveCallback<Uart>
+  requires hal::AsyncUart<Uart> && hal::UartRegisterReceiveCallback<Uart>
 class Echo {
  public:
   explicit Echo(Uart& uart)
@@ -18,6 +18,7 @@ class Echo {
     uart.Write(data);
     uart.Receive(buf);
   }
+
  private:
   std::array<std::byte, 128> buf{};
   Uart&                      uart;
@@ -30,10 +31,9 @@ extern "C" [[noreturn]] int main() {
   ClockInit();
 
   stm32g0::Gpo led{PIN(A, 5)};
-  auto& inst = PcUart::instance();
+  auto&        inst = PcUart::instance();
 
   Echo echo{inst};
-
 
   while (true) {
     led.Toggle();
